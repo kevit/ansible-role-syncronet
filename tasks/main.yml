@@ -1,0 +1,100 @@
+---
+- name: Preparations Ubuntu | Installing Preliminary System Packages
+  apt:
+    update_cache: yes
+    name: "{{ item }}"
+    state: "latest"
+  with_items:
+    - wget
+    - zip
+    - unzip
+    - subversion
+    - cvs
+    - build-essential
+    - make
+    - pkg-config
+    - gcc
+    - autotools-dev
+    - libnspr4-dev
+    - libncurses5-dev
+      #    - dosemu
+  async: 900
+  poll: 5
+- name: Add Group sbbs
+  group:
+    name: sbbs
+    state: present
+
+- name: Add User sbbs
+  user:
+    name: sbbs
+    comment: sbbs User
+    shell: /bin/bash
+    ssh_key_bits: 2048
+    ssh_key_file: .ssh/id_rsa
+    group: sbbs
+    state: present
+
+- name: Create SBBS directory
+  file:
+    path: /home/sbbs/sbbs
+    state: directory
+    owner: sbbs
+    group: sbbs
+
+- name: Download sbbs installer
+  get_url:
+    url: http://cvs.synchro.net/cgi-bin/viewcvs.cgi/*checkout*/install/GNUmakefile
+    dest: /home/sbbs/sbbs/GNUmakefile
+    owner: sbbs
+    group: sbbs
+
+- name: Execute sbbs install
+  shell: cd /home/sbbs/sbbs; make install SYMLINK=1 DOSEMU=1
+  become: yes
+  become_user: sbbs
+
+- name: Install SBBS SymLink
+  file:
+    src: /home/sbbs/sbbs
+    dest: /sbbs
+    owner: root
+    group: root
+    state: link
+
+- name: Install StartUp Script SBBS
+  template:
+    src: synchronet.service
+    dest: /etc/systemd/system/synchronet.service
+    mode: 0644
+
+
+- name: Downloads Terminfo
+  get_url:
+    url: http://cvs.synchro.net/cgi-bin/viewcvs.cgi/*checkout*/install/terminfo
+    dest: /sbbs/
+    owner: sbbs
+    group: sbbs
+
+- name: Downloads Termcap
+  get_url:
+    url: http://cvs.synchro.net/cgi-bin/viewcvs.cgi/*checkout*/install/termcap
+    dest: /sbbs/
+    owner: sbbs
+    group: sbbs
+
+- name: Finalise Terminfo installation
+  shell: cd /sbbs; tic terminfo
+  become: yes
+  become_user: sbbs
+
+- name: Finalise Termcap  installation
+  shell: cd /sbbs; cat termcap >> /etc/termcap
+
+
+- name: enable SBBS service
+  systemd:
+    name: synchronet
+    state: started
+    enabled: yes
+
